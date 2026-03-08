@@ -1,0 +1,38 @@
+# Django
+django>=5.0
+psycopg2-binary>=2.9
+django-celery-results>=2.5
+celery>=5.3
+redis>=5.0
+python-dotenv>=1.0
+
+# Agentic AI
+langgraph>=0.2.0
+langchain>=0.3.0
+langchain-anthropic>=0.2.0
+langchain-community>=0.3.0
+crewai>=0.80.0
+crewai-tools>=0.14.0
+
+# LLM
+anthropic>=0.40.0
+
+# AI Models
+torch>=2.0.0
+transformers>=4.40.0
+huggingface-hub>=0.24.0
+
+# Vector Store
+chromadb>=0.5.0
+
+# Medical Data
+pydicom>=2.4.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.11.0
+
+# Utilities
+pydantic>=2.0.0
+Pillow>=10.0.0

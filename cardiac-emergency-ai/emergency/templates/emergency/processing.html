@@ -1,0 +1,56 @@
+{% extends 'emergency/base.html' %}
+{% block content %}
+<style>
+    .processing-container {
+        text-align: center;
+        padding: 50px 20px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+        margin-top: 40px;
+    }
+
+    .spinner {
+        width: 60px;
+        height: 60px;
+        border: 5px solid #f3f3f3;
+        border-top: 5px solid #007bff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 30px;
+    }
+
+    @keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
+
+    .status-text {
+        font-size: 1.2rem;
+        color: #444;
+        margin-bottom: 10px;
+    }
+
+    .sub-text {
+        color: #888;
+        font-size: 0.95rem;
+    }
+</style>
+
+<div class="processing-container">
+    <div class="spinner"></div>
+    <h2>Analyzing Patient Data</h2>
+    <div id="status-container" data-patient-id="{{ patient.patient_id }}">
+        <p class="status-text" id="task-status">Initializing AI Agents...</p>
+        <p class="sub-text">1. Extracting Vitals (Gemini 2.5 Flash)<br>2. Running specialized models concurrenty<br>3.
+            Synthesizing Action Plan (LangGraph)</p>
+    </div>
+</div>
+
+<script src="/static/js/polling.js"></script>
+{% endblock %}

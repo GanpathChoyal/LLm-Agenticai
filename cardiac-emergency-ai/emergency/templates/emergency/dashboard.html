@@ -1,0 +1,53 @@
+{% extends 'emergency/base.html' %}
+{% block content %}
+<h2>ER Dashboard</h2>
+<div class="stats">
+    <p>Critical unconfirmed reports: {{ critical_count }}</p>
+</div>
+
+{% if critical_count > 0 %}
+<div class="emergency-alerts"
+    style="border: 2px solid red; padding: 15px; margin-bottom: 20px; background-color: #fff0f0;">
+    <h3 style="color: red;">🚨 Active Emergency Alerts</h3>
+    {% for report in recent_reports %}
+    {% if report.risk_level == 'CRITICAL' and not report.doctor_confirmed %}
+    <div class="alert-card" style="margin-bottom: 15px; border-bottom: 1px solid #ffcccc; padding-bottom: 10px;">
+        <h4>Patient: {{ report.patient.name }} ({{ report.patient.age }}y) - CRITICAL RISK</h4>
+        <p><strong>Primary Diagnosis / Summary:</strong> {{ report.final_report|truncatechars:150 }}</p>
+        <p><strong>Supporting Findings:</strong>
+            <br>ECG: {{ report.ecg_findings.findings|join:", " }}
+            <br>Biomarkers: {{ report.biomarker_findings.findings|join:", " }}
+        </p>
+        <p><strong>Conflict Resolution:</strong>
+            {% if report.agent_agreement %}
+            Agents in concordance.
+            {% else %}
+            Discordance detected & resolved by Reasoning Engine.
+            {% endif %}
+        </p>
+        <a href="{% url 'report' report.id %}"
+            style="background-color: red; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px;">Review
+            & Confirm</a>
+    </div>
+    {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+<h3>Recent Reports</h3>
+<table>
+    <tr>
+        <th>Patient</th>
+        <th>Risk Level</th>
+        <th>Time</th>
+        <th>Action</th>
+    </tr>
+    {% for report in recent_reports %}
+    <tr>
+        <td>{{ report.patient.name }} ({{ report.patient.age }}y)</td>
+        <td class="risk-{{ report.risk_level|lower }}">{{ report.risk_level }}</td>
+        <td>{{ report.created_at|date:"H:i" }}</td>
+        <td><a href="{% url 'report' report.id %}">View</a></td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

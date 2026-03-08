@@ -1,0 +1,136 @@
+{% extends 'emergency/base.html' %}
+{% block content %}
+<style>
+    .upload-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+        margin-top: 30px;
+    }
+
+    .upload-card {
+        background: white;
+        border: 2px dashed #007bff;
+        border-radius: 12px;
+        padding: 30px;
+        text-align: center;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .upload-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0, 123, 255, 0.15);
+    }
+
+    .upload-icon {
+        font-size: 40px;
+        margin-bottom: 15px;
+        color: #007bff;
+        display: block;
+    }
+
+    .upload-card h3 {
+        margin-top: 0;
+        color: #333;
+        font-size: 1.2rem;
+    }
+
+    .upload-card p {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 20px;
+    }
+
+    .file-input {
+        display: none;
+    }
+
+    .file-label {
+        background: #007bff;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        display: inline-block;
+        font-weight: 600;
+        font-size: 0.9rem;
+        transition: background 0.2s;
+    }
+
+    .file-label:hover {
+        background: #0056b3;
+    }
+
+    .submit-btn {
+        background: linear-gradient(135deg, #FF4B2B, #FF416C);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.2rem;
+        border-radius: 30px;
+        cursor: pointer;
+        font-weight: bold;
+        display: block;
+        margin: 40px auto 0;
+        box-shadow: 0 4px 15px rgba(255, 65, 108, 0.4);
+        transition: transform 0.2s;
+    }
+
+    .submit-btn:hover {
+        transform: scale(1.05);
+    }
+</style>
+
+<div class="header-section" style="text-align: center; margin-bottom: 20px;">
+    <h2>AI Triaging Extraction</h2>
+    <p style="color: #666; font-size: 1.1rem;">Upload patient files. Gemini 2.5 Flash will automatically extract vitals
+        and biomarkers from the report, then trigger the ECG and X-Ray agents concurrently.</p>
+</div>
+
+<form method="post" enctype="multipart/form-data" id="uploadForm">
+    {% csrf_token %}
+    <div class="upload-grid">
+        <!-- Report PDF -->
+        <div class="upload-card">
+            <span class="upload-icon">📄</span>
+            <h3>1. Patient Report</h3>
+            <p>Upload PDF or Image containing blood work and vitals.</p>
+            <label for="id_report_file" class="file-label" id="label_report">Choose File</label>
+            {{ upload_form.report_file }}
+        </div>
+
+        <!-- ECG Image -->
+        <div class="upload-card">
+            <span class="upload-icon">❤️</span>
+            <h3>2. ECG Rhythm</h3>
+            <p>Upload the 12-lead Electrocardiogram image capture.</p>
+            <label for="id_ecg_file" class="file-label" id="label_ecg">Choose File</label>
+            {{ upload_form.ecg_file }}
+        </div>
+
+        <!-- X-Ray Image -->
+        <div class="upload-card">
+            <span class="upload-icon">🩻</span>
+            <h3>3. Chest X-Ray</h3>
+            <p>Upload the AP/PA Chest Radiograph scan image.</p>
+            <label for="id_xray_file" class="file-label" id="label_xray">Choose File</label>
+            {{ upload_form.xray_file }}
+        </div>
+    </div>
+
+    <button type="submit" class="submit-btn" id="submitBtn">Extract & Analyze Patient</button>
+</form>
+
+<script>
+    // Update labels when files are selected
+    const inputs = ['report_file', 'ecg_file', 'xray_file'];
+    inputs.forEach(id => {
+        document.getElementById('id_' + id).addEventListener('change', function (e) {
+            let fileName = e.target.files[0].name;
+            if (fileName.length > 20) fileName = fileName.substring(0, 17) + '...';
+            document.getElementById('label_' + id.split('_')[0]).innerText = fileName;
+        });
+    });
+</script>
+{% endblock %}

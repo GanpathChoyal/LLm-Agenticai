@@ -1,0 +1,7 @@
+<AnnotatedECG>
+    <Patient>
+        <Name>John Doe</Name>
+        <Age>65</Age>
+    </Patient>
+    <Data>Mock ECG Data Content</Data>
+</AnnotatedECG>

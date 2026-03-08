@@ -1,0 +1,47 @@
+{% extends 'emergency/base.html' %}
+{% block content %}
+<h2>Diagnostic Report: {{ patient.name }}</h2>
+
+<div class="report-section">
+    <h3>Overall Risk: <span class="risk-{{ report.risk_level|lower }}">{{ report.risk_level }}</span></h3>
+    <p>Confidence: {{ report.confidence_score }}%</p>
+    <p>{{ report.final_report }}</p>
+</div>
+
+<div class="findings">
+    <h4>Specialist Findings</h4>
+    <p><strong>ECG:</strong> {{ report.ecg_findings.findings|join:", " }}</p>
+    <p><strong>Biomarkers:</strong> {{ report.biomarker_findings.findings|join:", " }}</p>
+    <p><strong>Imaging:</strong> {{ report.imaging_findings.findings|join:", " }}</p>
+</div>
+
+<div class="actions">
+    <h4>Recommended Actions</h4>
+    <ul>
+        {% for action in report.recommended_actions %}
+        <li>{{ action }}</li>
+        {% endfor %}
+    </ul>
+</div>
+
+{% if not report.doctor_confirmed %}
+<form id="confirm-form" method="post" action="{% url 'confirm' report.id %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <button type="button" onclick="confirmReport()">Confirm Report</button>
+</form>
+<script>
+    function confirmReport() {
+        fetch(document.getElementById('confirm-form').action, {
+            method: 'POST',
+            body: new FormData(document.getElementById('confirm-form'))
+        }).then(res => {
+            if (res.ok) window.location.href = "{% url 'dashboard' %}";
+        });
+    }
+</script>
+{% else %}
+<p><em>Confirmed by Doctor.</em></p>
+{% endif %}
+
+{% endblock %}
