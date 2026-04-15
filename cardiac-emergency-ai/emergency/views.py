@@ -1,6 +1,9 @@
 from django.shortcuts import render, redirect
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Avg, Count
+import json
 import time
 import concurrent.futures
 from .models import Patient, DiagnosticInput, DiagnosticReport
@@ -8,43 +11,105 @@ from .forms import UploadFilesForm
 from graph.pipeline import build_pipeline
 from agents.extraction_agent import extract_patient_data
 from agents.ecg_agent import analyze_ecg
-from agents.imaging_agent import analyze_xray
+from agents.imaging_agent import analyze_echo
 from agents.biomarker_agent import analyze_biomarkers
 
-def dashboard(request):
+
+def _serialize_dashboard_data():
+    """Serialize dashboard data for React frontend."""
     recent_reports = DiagnosticReport.objects.select_related(
         "patient"
-    ).order_by("-created_at")[:10]
-    
+    ).order_by("-created_at")[:20]
+
+    reports_data = []
+    for r in recent_reports:
+        reports_data.append({
+            "id": r.id,
+            "patient_name": r.patient.name or "Unknown Patient",
+            "patient_age": r.patient.age,
+            "patient_sex": r.patient.sex or "—",
+            "risk_level": r.risk_level,
+            "confidence_score": round(r.confidence_score, 1) if r.confidence_score else 0,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "doctor_confirmed": r.doctor_confirmed,
+            "final_report": r.final_report or "",
+            "ecg_findings": r.ecg_findings or {},
+            "biomarker_findings": r.biomarker_findings or {},
+            "imaging_findings": r.imaging_findings or {},
+            "recommended_actions": r.recommended_actions or [],
+            "processing_time_seconds": round(r.processing_time_seconds, 1) if r.processing_time_seconds else None,
+            "loop_count": r.loop_count,
+            "agent_agreement": r.agent_agreement,
+        })
+
+    # Aggregate stats
+    agg = DiagnosticReport.objects.aggregate(
+        avg_confidence=Avg("confidence_score"),
+        avg_processing=Avg("processing_time_seconds"),
+        total=Count("id"),
+    )
+
+    critical_count = DiagnosticReport.objects.filter(
+        risk_level="CRITICAL", doctor_confirmed=False
+    ).count()
+
+    # Risk distribution
+    risk_counts = dict(
+        DiagnosticReport.objects.values_list("risk_level")
+        .annotate(c=Count("id"))
+        .values_list("risk_level", "c")
+    )
+
+    return {
+        "reports": reports_data,
+        "stats": {
+            "critical_count": critical_count,
+            "total_reports": agg["total"] or 0,
+            "avg_confidence": round(agg["avg_confidence"] or 0, 1),
+            "avg_processing_time": round(agg["avg_processing"] or 0, 1),
+        },
+        "risk_distribution": {
+            "CRITICAL": risk_counts.get("CRITICAL", 0),
+            "HIGH": risk_counts.get("HIGH", 0),
+            "MODERATE": risk_counts.get("MODERATE", 0),
+            "LOW": risk_counts.get("LOW", 0),
+            "INCONCLUSIVE": risk_counts.get("INCONCLUSIVE", 0),
+        },
+    }
+
+
+def dashboard(request):
+    dashboard_data = _serialize_dashboard_data()
     context = {
-        "recent_reports": recent_reports,
-        "critical_count": DiagnosticReport.objects.filter(
-            risk_level="CRITICAL",
-            doctor_confirmed=False
-        ).count()
+        "dashboard_json": json.dumps(dashboard_data),
     }
     return render(request, "emergency/dashboard.html", context)
 
+
+def dashboard_api(request):
+    """JSON API for React dashboard refresh."""
+    return JsonResponse(_serialize_dashboard_data())
+
+@csrf_exempt
 def upload_patient(request):
     if request.method == "POST":
         upload_form = UploadFilesForm(request.POST, request.FILES)
         
         if upload_form.is_valid():
-            patient = Patient.objects.create() # Leave fields empty for Gemini
+            patient = Patient.objects.create()  # Leave fields empty for Gemini
             diagnostic_input = upload_form.save(commit=False)
             diagnostic_input.patient = patient
             diagnostic_input.save()
             
-            return redirect(
-                "processing",
-                patient_id=patient.patient_id
-            )
-    else:
-        upload_form = UploadFilesForm()
+            # Return JSON for React frontend
+            return JsonResponse({
+                "status": "ok",
+                "patient_id": str(patient.patient_id),
+            })
+        else:
+            return JsonResponse({"status": "error", "error": "Invalid form data"}, status=400)
     
-    return render(request, "emergency/upload.html", {
-        "upload_form": upload_form
-    })
+    return JsonResponse({"status": "error", "error": "POST required"}, status=405)
 
 def processing(request, patient_id):
     patient = Patient.objects.get(patient_id=patient_id)
@@ -86,7 +151,7 @@ def run_pipeline_sync(request, patient_id):
         # 2. Fire APIs Simultaneously (Colab Endpoints)
         print("Running Colab agents concurrently...")
         ecg_path = inputs.ecg_file.path if inputs.ecg_file else None
-        xray_path = inputs.xray_file.path if inputs.xray_file else None
+        echo_path = inputs.echo_file.path if inputs.echo_file else None
         
         # Prepare inputs for biomarker agent based on extraction
         biomarker_dict = {
@@ -100,15 +165,15 @@ def run_pipeline_sync(request, patient_id):
             "systolic_bp": inputs.systolic_bp
         }
         
-        ecg_res, xray_res, biomarker_res = None, None, None
+        ecg_res, echo_res, biomarker_res = None, None, None
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_ecg = executor.submit(analyze_ecg, ecg_path) if ecg_path else None
-            future_xray = executor.submit(analyze_xray, xray_path) if xray_path else None
+            future_echo = executor.submit(analyze_echo, echo_path) if echo_path else None
             future_bio = executor.submit(analyze_biomarkers, biomarker_dict)
             
             ecg_res = future_ecg.result() if future_ecg else {}
-            xray_res = future_xray.result() if future_xray else {}
+            echo_res = future_echo.result() if future_echo else {}
             biomarker_res = future_bio.result()
             
         print("Agents finished. Proceeding to LangGraph reasoning.")
@@ -118,10 +183,13 @@ def run_pipeline_sync(request, patient_id):
         result = pipeline.invoke({
             "patient_id": str(patient.patient_id),
             "symptoms": patient.symptoms.split(",") if patient.symptoms else [],
-            "onset_time": patient.onset_time,
+            "onset_time": patient.onset_time or "",
             "blood_values": biomarker_dict,
-            "ecg_data": ecg_res,
-            "xray_path": xray_res
+            "ecg_data": ecg_path or "",
+            "echo_path": echo_path or "",
+            "ecg_findings": ecg_res,
+            "biomarker_findings": biomarker_res,
+            "imaging_findings": echo_res,
         })
         
         processing_time = time.time() - start_time
@@ -130,7 +198,7 @@ def run_pipeline_sync(request, patient_id):
             patient=patient,
             ecg_findings=result.get("ecg_findings", ecg_res),
             biomarker_findings=result.get("biomarker_findings", biomarker_res),
-            imaging_findings=result.get("imaging_findings", xray_res),
+            imaging_findings=result.get("imaging_findings", echo_res),
             risk_level=result.get("risk_level", "INCONCLUSIVE"),
             final_report=result.get("final_report", ""),
             confidence_score=result.get("confidence_score", 0),
@@ -161,6 +229,35 @@ def view_report(request, report_id):
         "patient": report.patient
     })
 
+
+def report_api(request, report_id):
+    """JSON API for React report page."""
+    try:
+        r = DiagnosticReport.objects.select_related("patient").get(id=report_id)
+    except DiagnosticReport.DoesNotExist:
+        return JsonResponse({"error": "Report not found"}, status=404)
+    
+    return JsonResponse({
+        "id": r.id,
+        "patient_name": r.patient.name or "Unknown Patient",
+        "patient_age": r.patient.age,
+        "patient_sex": r.patient.sex or "—",
+        "risk_level": r.risk_level,
+        "confidence_score": round(r.confidence_score, 1) if r.confidence_score else 0,
+        "final_report": r.final_report or "",
+        "ecg_findings": r.ecg_findings or {},
+        "biomarker_findings": r.biomarker_findings or {},
+        "imaging_findings": r.imaging_findings or {},
+        "recommended_actions": r.recommended_actions or [],
+        "processing_time_seconds": round(r.processing_time_seconds, 1) if r.processing_time_seconds else None,
+        "doctor_confirmed": r.doctor_confirmed,
+        "loop_count": r.loop_count,
+        "agent_agreement": r.agent_agreement,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    })
+
+
+@csrf_exempt
 @require_POST
 def doctor_confirm(request, report_id):
     report = DiagnosticReport.objects.get(id=report_id)

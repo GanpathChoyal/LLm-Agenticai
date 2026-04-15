@@ -42,8 +42,8 @@ class DiagnosticInput(models.Model):
         upload_to="ecg_uploads/",
         null=True, blank=True
     )
-    xray_file = models.ImageField(
-        upload_to="xray_uploads/",
+    echo_file = models.FileField(
+        upload_to="echo_uploads/",
         null=True, blank=True
     )
     

@@ -1,32 +1,27 @@
 import os
 import json
-from langchain_anthropic import ChatAnthropic
-from langchain_core.messages import SystemMessage, HumanMessage
+import google.generativeai as genai
 
 def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> dict:
     """
-    Generates a unified emergency report using Claude 3.
+    Generates a unified emergency report using Gemini.
     Evaluates concordance between agents.
     """
     try:
-        api_key = os.getenv("ANTHROPIC_API_KEY")
-        if not api_key or api_key == "your_claude_api_key_here":
-             # Fallback if no key is provided during testing
-            return mock_reasoning_output(state_dict)
-
-        llm = ChatAnthropic(
-            model="claude-3-opus-20240229",
-            temperature=0.0,
-            anthropic_api_key=api_key
-        )
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            return mock_reasoning_output(state_dict, "No Gemini Key found.")
+        
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         system_prompt = """
         You are an expert Cardiac Reasoning AI. Cross-check findings from ECG, Biomarker, and Imaging agents.
-        You must output ONLY raw JSON data in the specified format, properly escaped.
+        You must output ONLY raw JSON data in the specified format, properly escaped. Do not wrap with ```json or any other text.
         Format:
         {
             "agent": "Reasoning Agent",
-            "model": "Claude 3",
+            "model": "Gemini",
             "status": "success",
             "findings": ["summary findings"],
             "risk_flags": ["critical flags"],
@@ -40,6 +35,8 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
         """
         
         prompt = f"""
+        {system_prompt}
+
         Patient Data:
         Symptoms: {state_dict.get('symptoms')}
         Onset Time: {state_dict.get('onset_time')}
@@ -51,18 +48,13 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
         Relevant Guidelines (RAG):
         {retrieved_guidelines}
         
-        Provide the final unified JSON assessment.
+        Provide the final unified JSON assessment. Evaluate if the patient is normal or abnormal based strictly on the provided findings. If the findings show normal results, the overall risk must be LOW.
         """
 
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=prompt)
-        ]
+        response = model.generate_content(prompt)
+        content = response.text.replace("```json", "").replace("```", "").strip()
         
-        response = llm.invoke(messages)
-        content = response.content
-        
-        # Simple JSON extract
+        # Simple JSON extract just in case there's leading/trailing text
         start_idx = content.find('{')
         end_idx = content.rfind('}') + 1
         json_str = content[start_idx:end_idx]
@@ -72,33 +64,42 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
         return result
         
     except Exception as e:
-        return {
-            "agent": "Reasoning Agent",
-            "model": "Claude 3",
-            "status": "error",
-            "findings": [f"Reasoning error: {str(e)}"],
-            "risk_flags": [],
-            "risk_direction": "INCONCLUSIVE",
-            "confidence": 0,
-            "reanalysis_needed": False,
-            "final_report": "",
-            "recommended_actions": [],
-            "discordant_agents": [],
-            "raw_output": {}
-        }
+        return mock_reasoning_output(state_dict, str(e))
 
-def mock_reasoning_output(state_dict: dict) -> dict:
+def mock_reasoning_output(state_dict: dict, error_msg: str) -> dict:
+    """
+    Creates a dynamic fallback output based on the actual state, instead of hardcoding a STEMI.
+    """
+    ecg = state_dict.get('ecg_findings', {})
+    bio = state_dict.get('biomarker_findings', {})
+    
+    # Simple rule based fallback
+    ecg_risk = ecg.get('risk_direction', 'INCONCLUSIVE')
+    bio_risk = bio.get('risk_direction', 'INCONCLUSIVE')
+    
+    risk_level = "MODERATE"
+    if ecg_risk == "CRITICAL" or bio_risk == "CRITICAL":
+        risk_level = "CRITICAL"
+    elif ecg_risk == "LOW" and bio_risk == "LOW":
+        risk_level = "LOW"
+        
+    findings = []
+    if ecg.get('findings'):
+        findings.extend(ecg['findings'])
+    if bio.get('findings'):
+         findings.extend(bio['findings'])
+         
     return {
         "agent": "Reasoning Agent",
-        "model": "Claude 3 (Mock)",
-        "status": "success",
-        "findings": ["Concordant findings of STEMI across ECG and biomarkers."],
-        "risk_flags": ["STEMI Confirmed", "Immediate Intervention Needed"],
-        "risk_direction": "CRITICAL",
-        "confidence": 95,
-        "reanalysis_needed": False,
-        "final_report": "Patient presents with chest pain and confirmed STEMI on ECG. Biomarkers show elevated hs-cTnT (rule-in). Immediate transfer to catheterization lab recommended.",
-        "recommended_actions": ["Activate Cath Lab", "Administer Aspirin", "Cardiology Consult"],
+        "model": "Fallback Rule Engine",
+        "status": "error" if "error" in error_msg.lower() else "success",
+        "findings": findings if findings else [f"Fallback activated due to: {error_msg}"],
+        "risk_flags": ["Fallback mode active"],
+        "risk_direction": risk_level,
+        "confidence": 50,
+        "reanalysis_needed": True,
+        "final_report": f"System engaged in rule-based fallback. ECG risk: {ecg_risk}. Biomarker risk: {bio_risk}.",
+        "recommended_actions": ["Review source data manually", "Consult specialist"],
         "discordant_agents": [],
-        "raw_output": {"mocked": True}
+        "raw_output": {"error": error_msg}
     }

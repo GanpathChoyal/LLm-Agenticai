@@ -109,13 +109,13 @@
             {{ upload_form.ecg_file }}
         </div>
 
-        <!-- X-Ray Image -->
+        <!-- Echo / Cardiac Ultrasound -->
         <div class="upload-card">
-            <span class="upload-icon">🩻</span>
-            <h3>3. Chest X-Ray</h3>
-            <p>Upload the AP/PA Chest Radiograph scan image.</p>
-            <label for="id_xray_file" class="file-label" id="label_xray">Choose File</label>
-            {{ upload_form.xray_file }}
+            <span class="upload-icon">🫀</span>
+            <h3>3. Echo / Cardiac Ultrasound</h3>
+            <p>Upload echocardiogram video (MP4, AVI) or DICOM image.</p>
+            <label for="id_echo_file" class="file-label" id="label_echo">Choose File</label>
+            {{ upload_form.echo_file }}
         </div>
     </div>
 
@@ -124,7 +124,7 @@
 
 <script>
     // Update labels when files are selected
-    const inputs = ['report_file', 'ecg_file', 'xray_file'];
+    const inputs = ['report_file', 'ecg_file', 'echo_file'];
     inputs.forEach(id => {
         document.getElementById('id_' + id).addEventListener('change', function (e) {
             let fileName = e.target.files[0].name;

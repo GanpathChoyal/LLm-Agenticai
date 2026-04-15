@@ -34,18 +34,18 @@ def extract_patient_data(report_path):
     if not os.path.exists(report_path):
         raise FileNotFoundError(f"Report file not found: {report_path}")
 
-    # For PDF we'd need to convert to Image or use Gemini's Document API, 
-    # but for simplicity assuming the user uploads an image containing the text via the frontend
-    try:
-        from PIL import Image
-        img = Image.open(report_path)
-    except Exception as e:
-        print(f"Error opening report image: {e}")
-        return {}
-
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
-        response = model.generate_content([extraction_prompt, img])
+        
+        if report_path.lower().endswith('.pdf'):
+            uploaded_doc = genai.upload_file(report_path)
+            content = [extraction_prompt, uploaded_doc]
+        else:
+            from PIL import Image
+            img = Image.open(report_path)
+            content = [extraction_prompt, img]
+            
+        response = model.generate_content(content)
         
         # Clean up any potential markdown formatting in the response
         json_str = response.text.replace("```json", "").replace("```", "").strip()

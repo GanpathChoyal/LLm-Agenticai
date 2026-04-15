@@ -1,0 +1,4 @@
+{
+    "status": "failed",
+    "error": "3 validation errors for DiagnosticState\nonset_time\n  Input should be a valid string [type=string_type, input_value=None, input_type=NoneType]\n    For further information visit https://errors.pydantic.dev/2.11/v/string_type\necg_data\n  Input should be a valid string [type=string_type, input_value={'agent': 'ECG Agent', 'm...False, 'raw_output': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.11/v/string_type\nxray_path\n  Input should be a valid string [type=string_type, input_value={'agent': 'Imaging Agent'...False, 'raw_output': {}}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.11/v/string_type"
+}

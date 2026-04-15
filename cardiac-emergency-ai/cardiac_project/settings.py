@@ -66,3 +66,7 @@ STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# External Colab API Base
+COLAB_API_BASE = os.getenv('COLAB_API_BASE', 'http://localhost')
+

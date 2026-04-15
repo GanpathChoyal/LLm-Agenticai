@@ -1,53 +1,505 @@
 {% extends 'emergency/base.html' %}
-{% block content %}
-<h2>ER Dashboard</h2>
-<div class="stats">
-    <p>Critical unconfirmed reports: {{ critical_count }}</p>
-</div>
+{% load static %}
 
-{% if critical_count > 0 %}
-<div class="emergency-alerts"
-    style="border: 2px solid red; padding: 15px; margin-bottom: 20px; background-color: #fff0f0;">
-    <h3 style="color: red;">🚨 Active Emergency Alerts</h3>
-    {% for report in recent_reports %}
-    {% if report.risk_level == 'CRITICAL' and not report.doctor_confirmed %}
-    <div class="alert-card" style="margin-bottom: 15px; border-bottom: 1px solid #ffcccc; padding-bottom: 10px;">
-        <h4>Patient: {{ report.patient.name }} ({{ report.patient.age }}y) - CRITICAL RISK</h4>
-        <p><strong>Primary Diagnosis / Summary:</strong> {{ report.final_report|truncatechars:150 }}</p>
-        <p><strong>Supporting Findings:</strong>
-            <br>ECG: {{ report.ecg_findings.findings|join:", " }}
-            <br>Biomarkers: {{ report.biomarker_findings.findings|join:", " }}
-        </p>
-        <p><strong>Conflict Resolution:</strong>
-            {% if report.agent_agreement %}
-            Agents in concordance.
-            {% else %}
-            Discordance detected & resolved by Reasoning Engine.
-            {% endif %}
-        </p>
-        <a href="{% url 'report' report.id %}"
-            style="background-color: red; color: white; padding: 5px 10px; text-decoration: none; border-radius: 3px;">Review
-            & Confirm</a>
-    </div>
-    {% endif %}
-    {% endfor %}
-</div>
-{% endif %}
-<h3>Recent Reports</h3>
-<table>
-    <tr>
-        <th>Patient</th>
-        <th>Risk Level</th>
-        <th>Time</th>
-        <th>Action</th>
-    </tr>
-    {% for report in recent_reports %}
-    <tr>
-        <td>{{ report.patient.name }} ({{ report.patient.age }}y)</td>
-        <td class="risk-{{ report.risk_level|lower }}">{{ report.risk_level }}</td>
-        <td>{{ report.created_at|date:"H:i" }}</td>
-        <td><a href="{% url 'report' report.id %}">View</a></td>
-    </tr>
-    {% endfor %}
-</table>
+{% block content %}
+<!-- React Dashboard Mount Point -->
+<div id="dashboard-root"></div>
+
+<!-- Dashboard Data from Django -->
+<script>
+    window.__DASHBOARD_DATA__ = {{ dashboard_json|safe }};
+</script>
+
+<!-- React 18 CDN -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<!-- Dashboard CSS -->
+<link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+
+<!-- React Dashboard App -->
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback } = React;
+
+// ─── Utility Helpers ────────────────────────────
+function getGreeting() {
+    const h = new Date().getHours();
+    if (h < 12) return "Good Morning";
+    if (h < 17) return "Good Afternoon";
+    return "Good Evening";
+}
+
+function formatTime(date) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function formatDate(isoStr) {
+    if (!isoStr) return "—";
+    const d = new Date(isoStr);
+    return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+}
+
+function timeAgo(isoStr) {
+    if (!isoStr) return "";
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+}
+
+function getInitials(name) {
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+// ─── Live Clock Component ──────────────────────
+function LiveClock() {
+    const [time, setTime] = useState(new Date());
+    useEffect(() => {
+        const id = setInterval(() => setTime(new Date()), 1000);
+        return () => clearInterval(id);
+    }, []);
+    const t = formatTime(time);
+    const parts = t.split(':');
+    return (
+        <div className="live-clock">
+            {parts[0]}<span className="clock-dot">:</span>{parts[1]}
+        </div>
+    );
+}
+
+// ─── Animated Number (Count-up) ────────────────
+function AnimatedNumber({ value, suffix = "", decimals = 0 }) {
+    const [display, setDisplay] = useState(0);
+    useEffect(() => {
+        const target = parseFloat(value) || 0;
+        const duration = 1200;
+        const start = performance.now();
+        function tick(now) {
+            const elapsed = now - start;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = 1 - Math.pow(1 - progress, 3);
+            setDisplay(eased * target);
+            if (progress < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    }, [value]);
+    return <>{decimals > 0 ? display.toFixed(decimals) : Math.round(display)}{suffix}</>;
+}
+
+// ─── Greeting Bar ──────────────────────────────
+function GreetingBar() {
+    return (
+        <div className="dash-greeting">
+            <div className="greeting-left">
+                <h1>{getGreeting()}, Doctor</h1>
+                <p>Cardiac Emergency AI monitoring • {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</p>
+            </div>
+            <div className="greeting-right">
+                <LiveClock />
+                <a href="/upload/" className="btn btn-primary" id="new-patient-btn">+ New Patient</a>
+            </div>
+        </div>
+    );
+}
+
+// ─── Stat Cards ────────────────────────────────
+function StatCard({ icon, value, label, suffix, decimals, variant }) {
+    return (
+        <div className={`stat-card-react card-${variant}`}>
+            <div className="stat-icon">{icon}</div>
+            <div className="stat-number">
+                <AnimatedNumber value={value} suffix={suffix} decimals={decimals} />
+            </div>
+            <div className="stat-card-label">{label}</div>
+        </div>
+    );
+}
+
+function StatsRow({ stats }) {
+    return (
+        <div className="stats-grid">
+            <StatCard icon="🚨" value={stats.critical_count} label="Critical Alerts" variant="critical" />
+            <StatCard icon="📊" value={stats.total_reports} label="Total Reports" variant="total" />
+            <StatCard icon="📈" value={stats.avg_confidence} suffix="%" label="Avg Confidence" variant="confidence" decimals={1} />
+            <StatCard icon="⚡" value={stats.avg_processing_time} suffix="s" label="Avg Process Time" variant="speed" decimals={1} />
+        </div>
+    );
+}
+
+// ─── Emergency Alerts ──────────────────────────
+function EmergencyAlerts({ reports }) {
+    const criticals = reports.filter(r => r.risk_level === 'CRITICAL' && !r.doctor_confirmed);
+    if (criticals.length === 0) return null;
+    return (
+        <div className="emergency-section">
+            <div className="emergency-header">
+                <div className="emergency-dot"></div>
+                <h3>🚨 Active Emergency Alerts</h3>
+            </div>
+            {criticals.map(r => (
+                <div className="alert-item" key={r.id}>
+                    <h4>{r.patient_name} ({r.patient_age || '?'}y) — CRITICAL RISK</h4>
+                    <p>{r.final_report ? r.final_report.substring(0, 200) + '...' : 'Analysis complete. Requires immediate review.'}</p>
+                    <div className="alert-actions">
+                        <a href={`/report/${r.id}/`} className="btn btn-danger" id={`review-alert-${r.id}`}>
+                            Review & Confirm →
+                        </a>
+                        <span style={{fontSize: '0.78rem', color: 'var(--text-muted)'}}>
+                            {timeAgo(r.created_at)}
+                        </span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+// ─── Risk Badge ────────────────────────────────
+function RiskBadge({ level }) {
+    const cls = (level || 'inconclusive').toLowerCase();
+    return (
+        <span className={`risk-pill pill-${cls}`}>
+            <span className="risk-dot"></span>
+            {level}
+        </span>
+    );
+}
+
+// ─── Confidence Bar ────────────────────────────
+function ConfidenceBar({ value }) {
+    const v = value || 0;
+    let cls = 'conf-high';
+    if (v < 60) cls = 'conf-low';
+    else if (v < 80) cls = 'conf-mid';
+    return (
+        <div className="confidence-cell">
+            <div className="confidence-bar-track">
+                <div className={`confidence-bar-fill ${cls}`} style={{width: `${v}%`}}></div>
+            </div>
+            <span className="confidence-value">{v}%</span>
+        </div>
+    );
+}
+
+// ─── Reports Table ─────────────────────────────
+function ReportsTable({ reports }) {
+    const [search, setSearch] = useState('');
+    const [riskFilter, setRiskFilter] = useState('ALL');
+
+    const filtered = useMemo(() => {
+        return reports.filter(r => {
+            const matchSearch = r.patient_name.toLowerCase().includes(search.toLowerCase());
+            const matchRisk = riskFilter === 'ALL' || r.risk_level === riskFilter;
+            return matchSearch && matchRisk;
+        });
+    }, [reports, search, riskFilter]);
+
+    const filters = ['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'];
+
+    return (
+        <div className="reports-panel">
+            <div className="panel-header">
+                <div className="panel-title">
+                    📋 Recent Reports
+                    <span className="count-badge">{filtered.length}</span>
+                </div>
+                <div className="panel-controls">
+                    <div className="search-box">
+                        <span className="search-icon">🔍</span>
+                        <input
+                            type="text"
+                            id="search-reports"
+                            placeholder="Search patients..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
+                    </div>
+                    {filters.map(f => (
+                        <button
+                            key={f}
+                            className={`filter-btn ${riskFilter === f ? 'active' : ''}`}
+                            onClick={() => setRiskFilter(f)}
+                            id={`filter-${f.toLowerCase()}`}
+                        >
+                            {f === 'ALL' ? 'All' : f.charAt(0) + f.slice(1).toLowerCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <table className="react-table">
+                <thead>
+                    <tr>
+                        <th>Patient</th>
+                        <th>Risk Level</th>
+                        <th>Confidence</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {filtered.length === 0 ? (
+                        <tr className="no-results-row">
+                            <td colSpan="6">
+                                {reports.length === 0
+                                    ? "No diagnostic reports yet. Upload your first patient to get started."
+                                    : "No reports match your search criteria."
+                                }
+                            </td>
+                        </tr>
+                    ) : filtered.map(r => {
+                        const avatarClass = r.patient_sex === 'M' ? 'avatar-m'
+                            : r.patient_sex === 'F' ? 'avatar-f' : 'avatar-default';
+                        return (
+                            <tr key={r.id}>
+                                <td>
+                                    <div className="patient-cell">
+                                        <div className={`patient-avatar ${avatarClass}`}>
+                                            {getInitials(r.patient_name)}
+                                        </div>
+                                        <div className="patient-info">
+                                            <div className="patient-name">{r.patient_name}</div>
+                                            <div className="patient-meta">{r.patient_age || '?'}y • {r.patient_sex}</div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><RiskBadge level={r.risk_level} /></td>
+                                <td><ConfidenceBar value={r.confidence_score} /></td>
+                                <td>
+                                    <div className="tooltip-wrapper">
+                                        <span style={{fontSize: '0.85rem'}}>{timeAgo(r.created_at)}</span>
+                                        <span className="tooltip-text">{formatDate(r.created_at)}</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    {r.doctor_confirmed ? (
+                                        <span className="status-chip confirmed">✔ Confirmed</span>
+                                    ) : (
+                                        <span className="status-chip pending">⏳ Pending</span>
+                                    )}
+                                </td>
+                                <td>
+                                    <a href={`/report/${r.id}/`} className="view-link" id={`view-report-${r.id}`}>
+                                        View →
+                                    </a>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+// ─── Donut Chart ───────────────────────────────
+function DonutChart({ distribution }) {
+    const total = Object.values(distribution).reduce((a, b) => a + b, 0);
+    if (total === 0) {
+        return (
+            <div className="sidebar-card">
+                <div className="sidebar-card-title">🎯 Risk Distribution</div>
+                <p style={{color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1rem 0'}}>
+                    No data yet
+                </p>
+            </div>
+        );
+    }
+
+    const colors = {
+        CRITICAL: '#e74c3c',
+        HIGH: '#e67e22',
+        MODERATE: '#f1c40f',
+        LOW: '#2ecc71',
+        INCONCLUSIVE: '#9094a8',
+    };
+
+    const radius = 40;
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+
+    const segments = Object.entries(distribution)
+        .filter(([_, count]) => count > 0)
+        .map(([level, count]) => {
+            const pct = count / total;
+            const dashLen = circumference * pct;
+            const seg = { level, count, color: colors[level], dashLen, offset };
+            offset += dashLen;
+            return seg;
+        });
+
+    return (
+        <div className="sidebar-card">
+            <div className="sidebar-card-title">🎯 Risk Distribution</div>
+            <div className="donut-wrapper">
+                <div className="donut-chart">
+                    <svg viewBox="0 0 100 100">
+                        {segments.map((s, i) => (
+                            <circle
+                                key={i}
+                                cx="50" cy="50" r={radius}
+                                stroke={s.color}
+                                strokeDasharray={`${s.dashLen} ${circumference - s.dashLen}`}
+                                strokeDashoffset={-s.offset + s.dashLen}
+                                strokeLinecap="round"
+                            />
+                        ))}
+                    </svg>
+                    <div className="donut-center">
+                        <div className="donut-total">{total}</div>
+                        <div className="donut-label">Total</div>
+                    </div>
+                </div>
+                <div className="donut-legend">
+                    {Object.entries(distribution).filter(([_, c]) => c > 0).map(([level, count]) => (
+                        <div className="legend-item" key={level}>
+                            <div className="legend-left">
+                                <div className={`legend-dot dot-${level.toLowerCase()}`}></div>
+                                <span className="legend-name">{level.charAt(0) + level.slice(1).toLowerCase()}</span>
+                            </div>
+                            <span className="legend-count">{count}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Agent Performance ─────────────────────────
+function AgentPerformance({ reports }) {
+    // Calculate how often each agent produced findings
+    const total = reports.length || 1;
+    const ecgCount = reports.filter(r => r.ecg_findings && Object.keys(r.ecg_findings).length > 0).length;
+    const bioCount = reports.filter(r => r.biomarker_findings && Object.keys(r.biomarker_findings).length > 0).length;
+    const imgCount = reports.filter(r => r.imaging_findings && Object.keys(r.imaging_findings).length > 0).length;
+
+    const agents = [
+        { name: 'ECG Agent', icon: '❤️', pct: Math.round((ecgCount / total) * 100), bar: 'bar-ecg' },
+        { name: 'Biomarker Agent', icon: '🧬', pct: Math.round((bioCount / total) * 100), bar: 'bar-bio' },
+        { name: 'Imaging Agent', icon: '🫀', pct: Math.round((imgCount / total) * 100), bar: 'bar-img' },
+    ];
+
+    return (
+        <div className="sidebar-card">
+            <div className="sidebar-card-title">🤖 Agent Activity</div>
+            <div className="agent-bar-list">
+                {agents.map(a => (
+                    <div className="agent-bar-item" key={a.name}>
+                        <div className="agent-bar-header">
+                            <span className="agent-bar-name">{a.icon} {a.name}</span>
+                            <span className="agent-bar-value" style={{color: 'var(--text-muted)'}}>{a.pct}%</span>
+                        </div>
+                        <div className="agent-bar-track">
+                            <div className={`agent-bar-fill ${a.bar}`} style={{width: `${a.pct}%`}}></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+// ─── Quick Actions ─────────────────────────────
+function QuickActions() {
+    return (
+        <div className="sidebar-card">
+            <div className="sidebar-card-title">⚡ Quick Actions</div>
+            <div className="quick-actions">
+                <a href="/upload/" className="quick-action-btn" id="qa-new-patient">
+                    <span className="qa-icon">📄</span>
+                    Upload New Patient
+                </a>
+                <a href="/admin/" className="quick-action-btn" id="qa-admin">
+                    <span className="qa-icon">⚙️</span>
+                    Admin Panel
+                </a>
+            </div>
+        </div>
+    );
+}
+
+// ─── Empty State ───────────────────────────────
+function EmptyDashboard() {
+    return (
+        <div className="empty-dashboard">
+            <div className="empty-icon">🩺</div>
+            <h3>Welcome to Cardiac Emergency AI</h3>
+            <p>
+                No diagnostic reports yet. Upload a patient's ECG, bloodwork, and echo files
+                to run the AI-powered cardiac emergency analysis pipeline.
+            </p>
+            <a href="/upload/" className="btn btn-primary" id="empty-upload-btn">
+                Upload First Patient →
+            </a>
+        </div>
+    );
+}
+
+// ─── Main Dashboard App ────────────────────────
+function DashboardApp() {
+    const [data, setData] = useState(window.__DASHBOARD_DATA__);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const refresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            const res = await fetch('/api/dashboard/');
+            const json = await res.json();
+            setData(json);
+        } catch (e) {
+            console.error('Refresh failed:', e);
+        }
+        setTimeout(() => setRefreshing(false), 800);
+    }, []);
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const id = setInterval(refresh, 30000);
+        return () => clearInterval(id);
+    }, [refresh]);
+
+    const { reports, stats, risk_distribution } = data;
+
+    if (reports.length === 0 && stats.total_reports === 0) {
+        return (
+            <div className="dash-container">
+                <GreetingBar />
+                <StatsRow stats={stats} />
+                <EmptyDashboard />
+            </div>
+        );
+    }
+
+    return (
+        <div className="dash-container">
+            <GreetingBar />
+            <StatsRow stats={stats} />
+            <EmergencyAlerts reports={reports} />
+
+            <div className="dash-bottom-grid">
+                <div>
+                    <ReportsTable reports={reports} />
+                </div>
+                <div className="dash-sidebar">
+                    <DonutChart distribution={risk_distribution} />
+                    <AgentPerformance reports={reports} />
+                    <QuickActions />
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Mount React ───────────────────────────────
+const root = ReactDOM.createRoot(document.getElementById('dashboard-root'));
+root.render(<DashboardApp />);
+</script>
+
 {% endblock %}

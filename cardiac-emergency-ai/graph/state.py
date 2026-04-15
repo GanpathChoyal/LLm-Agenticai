@@ -10,12 +10,15 @@ class DiagnosticState(BaseModel):
     # Raw data
     ecg_data: Optional[str] = None
     blood_values: Optional[dict] = None
-    xray_path: Optional[str] = None
+    echo_path: Optional[str] = None
 
     # Agent outputs
     ecg_findings: Optional[dict] = None
     biomarker_findings: Optional[dict] = None
     imaging_findings: Optional[dict] = None
+
+    # Critic output
+    critic_output: Optional[dict] = None
 
     # Agentic control
     loop_count: int = 0
@@ -37,3 +40,4 @@ class DiagnosticState(BaseModel):
     # Meta
     processing_time_seconds: Optional[float] = None
     agent_agreement: Optional[bool] = None
+

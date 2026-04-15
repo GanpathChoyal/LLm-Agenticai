@@ -1,0 +1,42 @@
+.risk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.risk-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.risk-dot.pulse {
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+
+.risk-critical { background: rgba(239, 68, 68, 0.12); color: #f87171; }
+.risk-critical .risk-dot { background: #ef4444; }
+
+.risk-high { background: rgba(249, 115, 22, 0.12); color: #fb923c; }
+.risk-high .risk-dot { background: #f97316; }
+
+.risk-moderate { background: rgba(234, 179, 8, 0.12); color: #facc15; }
+.risk-moderate .risk-dot { background: #eab308; }
+
+.risk-low { background: rgba(34, 197, 94, 0.12); color: #4ade80; }
+.risk-low .risk-dot { background: #22c55e; }
+
+.risk-inconclusive { background: rgba(148, 163, 184, 0.12); color: #94a3b8; }
+.risk-inconclusive .risk-dot { background: #94a3b8; }
