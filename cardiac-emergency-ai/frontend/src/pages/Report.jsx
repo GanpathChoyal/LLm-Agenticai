@@ -108,6 +108,40 @@ export default function Report() {
         <p className="summary-report">{report.final_report}</p>
       </div>
 
+      {/* Critic Review Card */}
+      {report.critic_output && (
+        <div className={`critic-card card ${report.critic_output.critic_verdict === 'challenged' ? 'critic-challenged' : 'critic-approved'}`}>
+          <div className="critic-header">
+            <h3>
+              {report.critic_output.critic_verdict === 'challenged' ? '⚠️ Critic Review: Challenged' : '✅ Critic Review: Approved'}
+            </h3>
+            {report.critic_output.risk_override && (
+              <span className="critic-override-badge">
+                Risk Overridden to {report.critic_output.risk_override}
+              </span>
+            )}
+          </div>
+          <p className="critic-text">
+            <strong>Critique:</strong> {report.critic_output.critique}
+          </p>
+          {(report.critic_output.confidence_adjustment !== 0 && report.critic_output.confidence_adjustment !== null) && (
+            <p className="critic-adjustment">
+              <em>Confidence Adjusted: {report.critic_output.confidence_adjustment > 0 ? '+' : ''}{report.critic_output.confidence_adjustment}%</em>
+            </p>
+          )}
+          {report.critic_output.issues_found && report.critic_output.issues_found.length > 0 && (
+            <div className="critic-issues">
+              <strong>Issues Found:</strong>
+              <ul>
+                {report.critic_output.issues_found.map((issue, idx) => (
+                  <li key={idx}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Findings Grid */}
       <div className="findings-grid">
         {findings.map((f, i) => {
