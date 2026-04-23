@@ -48,7 +48,8 @@ def critic_node(state: DiagnosticState) -> Dict[str, Any]:
         ecg_findings=state.ecg_findings or {},
         biomarker_findings=state.biomarker_findings or {},
         imaging_findings=state.imaging_findings or {},
-        reasoning_output=state.reasoning_output or {}
+        reasoning_output=state.reasoning_output or {},
+        retrieved_guidelines=state.retrieved_guidelines or ""
     )
 
     updates = {"critic_output": res}

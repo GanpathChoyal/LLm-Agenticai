@@ -7,7 +7,8 @@ def critique_reasoning(
     ecg_findings: dict,
     biomarker_findings: dict,
     imaging_findings: dict,
-    reasoning_output: dict
+    reasoning_output: dict,
+    retrieved_guidelines: str = ""
 ) -> dict:
     """
     Reviews the Reasoning Agent's conclusion against all 3 specialist findings.
@@ -23,7 +24,7 @@ def critique_reasoning(
         model = genai.GenerativeModel('gemini-2.5-flash')
 
         prompt = f"""You are a Senior Cardiologist acting as a Diagnostic Critic.
-Your job is to review a junior cardiologist's final diagnosis against the raw specialist reports.
+Your job is to review a junior cardiologist's final diagnosis against the raw specialist reports AND official medical guidelines.
 You must check if the final risk level is CLINICALLY JUSTIFIED by the evidence.
 
 Return ONLY raw JSON (no markdown, no code blocks):
@@ -37,10 +38,13 @@ Return ONLY raw JSON (no markdown, no code blocks):
 }}
 
 Rules:
-- "approved": The risk level is justified by the evidence. Move forward.
-- "challenged": There is a significant contradiction in the reasoning. Must reanalyze.
+- "approved": The risk level is justified by the evidence AND adheres to the provided guidelines. Move forward.
+- "challenged": There is a significant contradiction in the reasoning or a violation of guidelines. Must reanalyze.
 - confidence_adjustment: Reduce if reasoning seems overconfident or contradictory.
 - risk_override: Only set if you believe the risk level must change. Otherwise null.
+
+--- MEDICAL GUIDELINES ---
+{retrieved_guidelines if retrieved_guidelines else "No specific guidelines provided."}
 
 --- SPECIALIST FINDINGS ---
 ECG Agent: {json.dumps(ecg_findings, indent=2)}
@@ -52,12 +56,13 @@ Imaging Agent: {json.dumps(imaging_findings, indent=2)}
 --- REASONING AGENT'S FINAL CONCLUSION ---
 {json.dumps(reasoning_output, indent=2)}
 
-Now critically evaluate: Is this conclusion justified by the evidence above?
+Now critically evaluate: Is this conclusion justified by the evidence and guidelines above?
 Look for:
 1. Risk level contradicted by majority of specialist findings
 2. Overconfident score (>90%) when findings are incomplete or mixed
 3. Final report ignoring a specialist's critical flag
 4. Discordant agents not listed when specialists clearly disagree
+5. Actions or diagnoses that violate the medical guidelines provided
 """
 
         response = model.generate_content(prompt)
