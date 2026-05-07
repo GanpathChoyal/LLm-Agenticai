@@ -99,7 +99,15 @@ export default function Report() {
         <div className="summary-header">
           <div>
             <h3>Overall Assessment</h3>
-            <p className="confidence-text">Confidence: {report.confidence_score}%</p>
+            <div className="meta-row">
+              <p className="confidence-text">Confidence: {report.confidence_score}%</p>
+              <span className="meta-divider">|</span>
+              <p className="loop-text">Loops: {report.loop_count}</p>
+              <span className="meta-divider">|</span>
+              <p className={`agreement-text ${report.agent_agreement ? 'ag-yes' : 'ag-no'}`}>
+                {report.agent_agreement ? '✅ Concordant' : '⚠️ Discordant'}
+              </p>
+            </div>
           </div>
           {report.processing_time_seconds && (
             <span className="proc-time">⚡ {report.processing_time_seconds}s</span>

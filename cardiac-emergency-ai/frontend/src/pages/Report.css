@@ -75,9 +75,25 @@
 
 .summary-header h3 { margin-bottom: 0.2rem; }
 
-.confidence-text {
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.3rem;
   color: var(--text-muted);
-  font-size: 0.88rem;
+  font-size: 0.85rem;
+}
+
+.meta-divider {
+  opacity: 0.2;
+  font-weight: 200;
+}
+
+.ag-yes { color: var(--accent-green); font-weight: 500; }
+.ag-no { color: var(--risk-critical); font-weight: 500; }
+
+.confidence-text, .loop-text {
+  color: var(--text-muted);
 }
 
 .proc-time {

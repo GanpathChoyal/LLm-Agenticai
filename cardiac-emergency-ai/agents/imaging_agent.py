@@ -4,7 +4,7 @@ import urllib3
 import base64
 import mimetypes
 import cv2
-import google.generativeai as genai
+from google import genai
 from PIL import Image as PILImage
 from django.conf import settings
 
@@ -63,18 +63,17 @@ def analyze_echo_with_gemini(echo_path: str, frame=None) -> dict:
     Local fallback: analyze the Echo frame using Gemini Vision directly.
     """
     print("[Imaging Agent] Colab endpoint skipped — using Gemini Vision fallback.")
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("IMAGING_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set for local fallback.")
+        raise ValueError("IMAGING_GEMINI_API_KEY or GEMINI_API_KEY not set for local fallback.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    client = genai.Client(api_key=api_key)
 
     prompt = """You are a specialist cardiac imaging AI analyzing an echocardiogram (cardiac ultrasound).
     Analyze this image and return ONLY raw JSON (no markdown, no code blocks) in this exact format:
     {
         "agent": "Imaging Agent",
-        "model": "Gemini-2.5-Flash",
+        "model": "Gemini-2.0-Flash",
         "status": "success",
         "findings": ["finding1", "finding2"],
         "risk_flags": ["flag1"],
@@ -87,15 +86,15 @@ def analyze_echo_with_gemini(echo_path: str, frame=None) -> dict:
     """
 
     if frame is not None:
-        # Convert OpenCV numpy array to PIL image
         import numpy as np
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         pil_image = PILImage.fromarray(rgb_frame)
-        response = model.generate_content([prompt, pil_image])
+        response = client.models.generate_content(
+            model='gemini-flash-latest', contents=[prompt, pil_image])
     else:
-        # Load image from path directly
         pil_image = PILImage.open(echo_path)
-        response = model.generate_content([prompt, pil_image])
+        response = client.models.generate_content(
+            model='gemini-flash-latest', contents=[prompt, pil_image])
 
     content = response.text.replace("```json", "").replace("```", "").strip()
     start_idx = content.find('{')

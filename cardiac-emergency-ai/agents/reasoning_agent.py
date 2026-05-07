@@ -1,6 +1,6 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
 
 def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> dict:
     """
@@ -8,12 +8,11 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
     Evaluates concordance between agents.
     """
     try:
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = os.getenv("REASONING_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
         if not api_key:
             return mock_reasoning_output(state_dict, "No Gemini Key found.")
         
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        client = genai.Client(api_key=api_key)
         
         system_prompt = """
         You are an expert Cardiac Reasoning AI. Cross-check findings from ECG, Biomarker, and Imaging agents.
@@ -34,6 +33,18 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
         }
         """
         
+        critic_feedback = ""
+        if state_dict.get('critic_output'):
+            critic = state_dict['critic_output']
+            critic_feedback = f"""
+        --- PREVIOUS CRITIC FEEDBACK ---
+        Verdict: {critic.get('critic_verdict')}
+        Critique: {critic.get('critique')}
+        Issues Found: {critic.get('issues_found')}
+        
+        Please address these concerns in your updated reasoning.
+        """
+
         prompt = f"""
         {system_prompt}
 
@@ -48,10 +59,12 @@ def generate_reasoning_report(state_dict: dict, retrieved_guidelines: str) -> di
         Relevant Guidelines (RAG):
         {retrieved_guidelines}
         
+        {critic_feedback}
+
         Provide the final unified JSON assessment. Evaluate if the patient is normal or abnormal based strictly on the provided findings. If the findings show normal results, the overall risk must be LOW.
         """
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
         content = response.text.replace("```json", "").replace("```", "").strip()
         
         # Simple JSON extract just in case there's leading/trailing text

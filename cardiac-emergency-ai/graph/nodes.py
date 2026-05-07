@@ -29,14 +29,40 @@ def reasoning_node(state: DiagnosticState) -> Dict[str, Any]:
     guidelines = retrieve_guidelines(state.symptoms)
     res = generate_reasoning_report(state.dict(), guidelines)
 
+    # Check for LLM-identified discordance
+    discordant_agents = res.get("discordant_agents", [])
+    has_discordance = len(discordant_agents) > 0
+
+    # Check for agent technical failures
+    agents_failed = False
+    if state.ecg_findings and state.ecg_findings.get("status") == "error":
+        agents_failed = True
+    if state.biomarker_findings and state.biomarker_findings.get("status") == "error":
+        agents_failed = True
+    if state.imaging_findings and state.imaging_findings.get("status") == "error":
+        agents_failed = True
+
+    agent_agreement = not (has_discordance or agents_failed)
+
+    # Safegaurd: Cap confidence at 75% if there is discordance or failure
+    raw_confidence = res.get("confidence", 0)
+    if not agent_agreement and raw_confidence > 75:
+        confidence_score = 75
+        print(f"[Reasoning Node] Discordance/failure detected. Capping overconfident score from {raw_confidence}% to 75%.")
+    else:
+        confidence_score = raw_confidence
+
     return {
         "reasoning_output": res,
         "risk_level": res.get("risk_direction", "INCONCLUSIVE"),
         "final_report": res.get("final_report", ""),
-        "confidence_score": res.get("confidence", 0),
+        "confidence_score": confidence_score,
         "recommended_actions": res.get("recommended_actions", []),
         "retrieved_guidelines": guidelines,
-        "loop_count": state.loop_count + 1
+        "loop_count": state.loop_count + 1,
+        "agent_agreement": agent_agreement,
+        "discordant_agents": discordant_agents,
+        "discordant": has_discordance
     }
 
 def critic_node(state: DiagnosticState) -> Dict[str, Any]:
@@ -48,7 +74,8 @@ def critic_node(state: DiagnosticState) -> Dict[str, Any]:
         ecg_findings=state.ecg_findings or {},
         biomarker_findings=state.biomarker_findings or {},
         imaging_findings=state.imaging_findings or {},
-        reasoning_output=state.reasoning_output or {}
+        reasoning_output=state.reasoning_output or {},
+        retrieved_guidelines=state.retrieved_guidelines or ""
     )
 
     updates = {"critic_output": res}

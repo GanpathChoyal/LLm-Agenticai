@@ -70,3 +70,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # External Colab API Base
 COLAB_API_BASE = os.getenv('COLAB_API_BASE', 'http://localhost')
 
+# Multi-agent looping
+MAX_LOOP_COUNT = int(os.getenv('MAX_LOOP_COUNT', 2))
+

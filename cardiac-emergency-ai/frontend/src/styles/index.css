@@ -54,8 +54,9 @@
   padding: 0;
 }
 
-html {
-  scroll-behavior: smooth;
+html, body {
+  overflow-x: hidden;
+  width: 100%;
 }
 
 body {
@@ -102,10 +103,9 @@ a:hover { color: var(--accent-hover); }
 }
 
 .header-inner {
-  max-width: 1320px;
-  margin: 0 auto;
-  padding: 0 2rem;
-  height: 64px;
+  width: 100%;
+  padding: 0 5%;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;

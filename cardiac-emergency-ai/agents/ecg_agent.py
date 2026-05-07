@@ -2,7 +2,7 @@ import os
 import requests
 import urllib3
 import base64
-import google.generativeai as genai
+from google import genai
 from PIL import Image as PILImage
 from django.conf import settings
 
@@ -12,18 +12,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def analyze_ecg_with_gemini(ecg_path: str) -> dict:
     """Local Gemini Vision fallback for ECG analysis."""
     print("[ECG Agent] Using Gemini Vision fallback for ECG analysis.")
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("ECG_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set.")
+        raise ValueError("ECG_GEMINI_API_KEY or GEMINI_API_KEY not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    client = genai.Client(api_key=api_key)
 
     prompt = """You are a specialist cardiologist AI analyzing a 12-lead ECG image.
     Analyze this ECG and return ONLY raw JSON (no markdown, no code blocks) in this exact format:
     {
         "agent": "ECG Agent",
-        "model": "Gemini-2.5-Flash",
+        "model": "Gemini-2.0-Flash",
         "status": "success",
         "findings": ["finding1", "finding2"],
         "risk_flags": ["flag1"],
@@ -37,7 +36,10 @@ def analyze_ecg_with_gemini(ecg_path: str) -> dict:
     """
 
     pil_image = PILImage.open(ecg_path)
-    response = model.generate_content([prompt, pil_image])
+    response = client.models.generate_content(
+        model='gemini-flash-latest',
+        contents=[prompt, pil_image]
+    )
     content = response.text.replace("```json", "").replace("```", "").strip()
     start_idx = content.find('{')
     end_idx = content.rfind('}') + 1

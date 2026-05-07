@@ -34,7 +34,6 @@ export default function Dashboard() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [riskFilter, setRiskFilter] = useState('ALL')
-  const [clock, setClock] = useState(new Date())
 
   // Fetch dashboard data
   useEffect(() => {
@@ -50,12 +49,6 @@ export default function Dashboard() {
     load()
     const interval = setInterval(load, 30000) // auto-refresh
     return () => { mounted = false; clearInterval(interval) }
-  }, [])
-
-  // Live clock
-  useEffect(() => {
-    const id = setInterval(() => setClock(new Date()), 1000)
-    return () => clearInterval(id)
   }, [])
 
   // Filter reports
@@ -90,8 +83,7 @@ export default function Dashboard() {
 
   const { reports, stats, risk_distribution } = data
   const criticals = reports.filter(r => r.risk_level === 'CRITICAL' && !r.doctor_confirmed)
-  const clockStr = clock.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
-  const dateStr = clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
   const filters = ['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW']
 
   return (
@@ -103,10 +95,7 @@ export default function Dashboard() {
           <p className="greeting-subtitle">Cardiac Emergency AI monitoring • {dateStr}</p>
         </div>
         <div className="greeting-right">
-          <div className="live-clock">
-            <span className="clock-pulse" />
-            {clockStr}
-          </div>
+          <LiveClock />
           <Link to="/upload" className="btn btn-primary">+ New Patient</Link>
         </div>
       </section>
@@ -277,6 +266,25 @@ export default function Dashboard() {
           </div>
         </aside>
       </section>
+    </div>
+  )
+}
+
+/* Live clock mini-component to isolate re-renders */
+function LiveClock() {
+  const [clock, setClock] = useState(new Date())
+
+  useEffect(() => {
+    const id = setInterval(() => setClock(new Date()), 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  const clockStr = clock.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+
+  return (
+    <div className="live-clock">
+      <span className="clock-pulse" />
+      {clockStr}
     </div>
   )
 }

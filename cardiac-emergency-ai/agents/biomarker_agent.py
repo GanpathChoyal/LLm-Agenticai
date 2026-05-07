@@ -2,7 +2,8 @@ import os
 import requests
 import urllib3
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from django.conf import settings
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -11,18 +12,17 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def analyze_biomarkers_with_gemini(blood_values: dict) -> dict:
     """Local Gemini fallback for biomarker analysis."""
     print("[Biomarker Agent] Using Gemini fallback for biomarker analysis.")
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("BIOMARKER_GEMINI_API_KEY") or os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY not set.")
+        raise ValueError("BIOMARKER_GEMINI_API_KEY or GEMINI_API_KEY not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-2.5-flash')
+    client = genai.Client(api_key=api_key)
 
     prompt = f"""You are a specialist cardiologist AI analyzing blood biomarker results.
     Analyze the following blood values and return ONLY raw JSON (no markdown, no code blocks):
     {{
         "agent": "Biomarker Agent",
-        "model": "Gemini-2.5-Flash",
+        "model": "Gemini-2.0-Flash",
         "status": "success",
         "findings": ["finding1", "finding2"],
         "risk_flags": ["flag1"],
@@ -39,7 +39,7 @@ def analyze_biomarkers_with_gemini(blood_values: dict) -> dict:
     Normal thresholds: troponin < 14 ng/L, BNP < 100 pg/mL, LDL < 3.4 mmol/L, HbA1c < 5.7%, creatinine 0.7-1.3 mg/dL.
     """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
     content = response.text.replace("```json", "").replace("```", "").strip()
     start_idx = content.find('{')
     end_idx = content.rfind('}') + 1

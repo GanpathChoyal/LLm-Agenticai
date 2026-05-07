@@ -3,6 +3,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Avg, Count
+from django.conf import settings
 import json
 import time
 import concurrent.futures
@@ -190,6 +191,7 @@ def run_pipeline_sync(request, patient_id):
             "ecg_findings": ecg_res,
             "biomarker_findings": biomarker_res,
             "imaging_findings": echo_res,
+            "max_loops": settings.MAX_LOOP_COUNT,
         })
         
         processing_time = time.time() - start_time

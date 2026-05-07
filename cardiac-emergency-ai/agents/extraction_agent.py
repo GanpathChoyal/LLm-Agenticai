@@ -1,9 +1,9 @@
 import os
-import google.generativeai as genai
+from google import genai
 import json
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY"))
-
+api_key = os.environ.get("EXTRACTION_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
+client = genai.Client(api_key=api_key)
 extraction_prompt = """
 You are a medical data extraction AI. Extract the following patient demographics and laboratory vitals from the provided clinical report image/PDF.
 
@@ -35,17 +35,23 @@ def extract_patient_data(report_path):
         raise FileNotFoundError(f"Report file not found: {report_path}")
 
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
         if report_path.lower().endswith('.pdf'):
-            uploaded_doc = genai.upload_file(report_path)
-            content = [extraction_prompt, uploaded_doc]
+            import pathlib
+            file_bytes = pathlib.Path(report_path).read_bytes()
+            response = client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=[
+                    genai.types.Part.from_bytes(data=file_bytes, mime_type='application/pdf'),
+                    extraction_prompt
+                ]
+            )
         else:
             from PIL import Image
             img = Image.open(report_path)
-            content = [extraction_prompt, img]
-            
-        response = model.generate_content(content)
+            response = client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=[extraction_prompt, img]
+            )
         
         # Clean up any potential markdown formatting in the response
         json_str = response.text.replace("```json", "").replace("```", "").strip()

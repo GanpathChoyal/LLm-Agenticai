@@ -1,16 +1,17 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
 
 
 def critique_reasoning(
     ecg_findings: dict,
     biomarker_findings: dict,
     imaging_findings: dict,
-    reasoning_output: dict
+    reasoning_output: dict,
+    retrieved_guidelines: str = ""
 ) -> dict:
     """
-    Reviews the Reasoning Agent's conclusion against all 3 specialist findings.
+    Reviews the Reasoning Agent's conclusion against all 3 specialist findings and clinical guidelines.
     Acts as a senior cardiologist double-checking the final diagnosis.
     """
     try:
@@ -19,8 +20,7 @@ def critique_reasoning(
         if not api_key:
             return _default_approve("No CRITIC_GEMINI_API_KEY or GEMINI_API_KEY set.")
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        client = genai.Client(api_key=api_key)
 
         prompt = f"""You are a Senior Cardiologist acting as a Diagnostic Critic.
 Your job is to review a junior cardiologist's final diagnosis against the raw specialist reports.
@@ -52,7 +52,10 @@ Imaging Agent: {json.dumps(imaging_findings, indent=2)}
 --- REASONING AGENT'S FINAL CONCLUSION ---
 {json.dumps(reasoning_output, indent=2)}
 
-Now critically evaluate: Is this conclusion justified by the evidence above?
+--- CLINICAL GUIDELINES (RAG) ---
+{retrieved_guidelines}
+
+Now critically evaluate: Is this conclusion justified by both the findings AND the established guidelines?
 Look for:
 1. Risk level contradicted by majority of specialist findings
 2. Overconfident score (>90%) when findings are incomplete or mixed
@@ -60,7 +63,7 @@ Look for:
 4. Discordant agents not listed when specialists clearly disagree
 """
 
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(model='gemini-flash-latest', contents=prompt)
         content = response.text.replace("```json", "").replace("```", "").strip()
         start_idx = content.find('{')
         end_idx = content.rfind('}') + 1
